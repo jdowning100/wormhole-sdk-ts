@@ -16,6 +16,12 @@ import type {
   TransactionRequest,
 } from 'ethers';
 import { NonceManager, Wallet } from 'ethers';
+// Import quais for Quai support
+import type {
+  Signer as QuaiSigner,
+  TransactionRequest as QuaiTransactionRequest,
+} from 'quais';
+import { JsonRpcProvider as QuaiJsonRpcProvider, Wallet as QuaiWalletImpl, Zone } from 'quais';
 import { EvmPlatform } from './platform.js';
 import type { EvmChains } from './types.js';
 import { _platform } from './types.js';
@@ -36,10 +42,16 @@ export async function getEvmSigner(
   key: string | EthersSigner,
   opts?: EvmSignerOptions & { chain?: EvmChains },
 ): Promise<Signer> {
+  const chain = opts?.chain ?? (await EvmPlatform.chainFromRpc(rpc))[1];
+  
+  // Check if this is Quai and use quais.js instead of ethers
+  if (chain === 'QuaiTestnet') {
+    return getQuaiSigner(rpc, key, opts);
+  }
+
   const signer: EthersSigner =
     typeof key === 'string' ? new Wallet(key, rpc) : key;
 
-  const chain = opts?.chain ?? (await EvmPlatform.chainFromRpc(rpc))[1];
   const managedSigner = new NonceManager(signer);
 
   if (managedSigner.provider === null) {
@@ -58,6 +70,39 @@ export async function getEvmSigner(
   );
 }
 
+// Quai-specific signer function using quais.js
+async function getQuaiSigner(
+  rpc: Provider,
+  key: string | EthersSigner,
+  opts?: EvmSignerOptions & { chain?: EvmChains },
+): Promise<Signer> {
+  let quaiSigner: QuaiSigner;
+  
+  if (typeof key === 'string') {
+    // Private key case - create wallet with provider
+    const rpcUrl = (rpc as any).connection?.url || '';
+    if (!rpcUrl) {
+      throw new Error('Unable to extract RPC URL for Quai provider');
+    }
+    
+    const quaiProvider = new QuaiJsonRpcProvider(rpcUrl);
+    quaiSigner = new QuaiWalletImpl(key, quaiProvider);
+  } else {
+    // Wallet case - assume key is already a quais Signer from BrowserProvider
+    // This handles window.pelagus.getSigner() which returns a quais Signer
+    quaiSigner = key as any as QuaiSigner;
+  }
+
+  const chain = opts?.chain ?? 'QuaiTestnet' as EvmChains;
+
+  return new QuaiNativeSigner(
+    chain,
+    await quaiSigner.getAddress(),
+    quaiSigner,
+    opts,
+  );
+}
+
 // Get a SignOnlySigner for the EVM platform
 export async function getEvmSignerForKey(
   rpc: Provider,
@@ -72,6 +117,19 @@ export async function getEvmSignerForSigner(
 ): Promise<Signer> {
   if (!signer.provider) throw new Error('Signer must have a provider');
   return getEvmSigner(signer.provider!, signer, {});
+}
+
+// Get a SignOnlySigner for Quai using quais Signer
+export async function getQuaiSignerForSigner(
+  signer: QuaiSigner,
+): Promise<Signer> {
+  if (!signer.provider) throw new Error('Quai signer must have a provider');
+  
+  // Create a dummy ethers provider since getEvmSigner expects one
+  // The actual provider logic is handled in getQuaiSigner
+  const dummyProvider = {} as Provider;
+  
+  return getEvmSigner(dummyProvider, signer as any, { chain: 'QuaiTestnet' });
 }
 
 export class EvmNativeSigner<N extends Network, C extends EvmChains = EvmChains>
@@ -137,6 +195,77 @@ export class EvmNativeSigner<N extends Network, C extends EvmChains = EvmChains>
         console.log(`Signing: ${description} for ${this.address()}`);
 
       const t: TransactionRequest = {
+        ...transaction,
+        ...gasOpts,
+        from: this.address(),
+        nonce: await this._signer.getNonce(),
+        // Override any existing values with those passed in the constructor
+        ...this.opts?.overrides,
+      };
+
+      signed.push(await this._signer.signTransaction(t));
+    }
+    return signed;
+  }
+}
+
+// Quai-specific signer class using quais.js
+export class QuaiNativeSigner<N extends Network, C extends EvmChains = EvmChains>
+  extends PlatformNativeSigner<QuaiSigner, N, C>
+  implements SignOnlySigner<N, C>
+{
+  constructor(
+    _chain: C,
+    _address: string,
+    _signer: QuaiSigner,
+    readonly opts?: EvmSignerOptions,
+  ) {
+    super(_chain, _address, _signer);
+  }
+
+  chain(): C {
+    return this._chain;
+  }
+
+  address(): string {
+    return this._address;
+  }
+
+  async sign(tx: UnsignedTransaction<N, C>[]): Promise<SignedTx[]> {
+    const signed = [];
+
+    // Default gas values for Quai
+    let gasLimit = 500_000n;
+    let gasPrice = 100_000_000_000n; // 100gwei
+
+    // Get gas price from provider if available
+    if (this.opts?.overrides === undefined) {
+      try {
+        const feeData = await this._signer.provider!.getFeeData(Zone.Cyprus1, true);
+        gasPrice = feeData.gasPrice ?? gasPrice;
+      } catch (e) {
+        // Use default if fee data fetch fails
+      }
+    }
+
+    if (this.opts?.gasLimit !== undefined) {
+      gasLimit = this.opts.gasLimit;
+    }
+
+    if (this.opts?.maxGasLimit !== undefined) {
+      gasLimit =
+        gasLimit > this.opts?.maxGasLimit ? this.opts?.maxGasLimit : gasLimit;
+    }
+
+    const gasOpts = { gasLimit, gasPrice };
+
+    for (const txn of tx) {
+      const { transaction, description } = txn;
+      if (this.opts?.debug)
+        console.log(`Signing: ${description} for ${this.address()}`);
+
+      // Convert ethers TransactionRequest to quais format
+      const t: QuaiTransactionRequest = {
         ...transaction,
         ...gasOpts,
         from: this.address(),

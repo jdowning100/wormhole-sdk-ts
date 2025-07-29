@@ -60,7 +60,7 @@ export const coreBridgeContracts = [[
     ["Pythnet",         "EUrRARh92Cdc54xrDn6qzaqjA77NRrCcfbr8kPwoTL4z"],
     ["Base",            "0x23908A62110e21C04F3A4e011d24F901F911744A"],
     ["Sei",             "sei1nna9mzp274djrgzhzkac2gvm3j27l402s4xzr08chq57pjsupqnqaj0d5s"],
-    ["Sepolia",         "0x4a8bc80Ed5a4067f1CCf107057b8270E0cC11A78"],
+    ["Sepolia",         "0x9b4C71FcE35aC14aeA71179aba932046f713a8DE"],
     ["Wormchain",       "wormhole16jzpxp0e8550c9aht6q9svcux30vtyyyyxv5w2l2djjra46580wsazcjwp"],
     ["ArbitrumSepolia", "0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35"],
     ["BaseSepolia",     "0x79A1027a6A159502049F10906D333EC57E95F083"],
@@ -82,7 +82,8 @@ export const coreBridgeContracts = [[
     ["Mezo",            "0x268557122Ffd64c85750d630b716471118F323c8"],
     ["Converge",        "0x556B259cFaCd9896B2773310080c7c3bcE90Ff01"],
     ["Fogo",            "BhnQyKoQQgpuRTRo6D8Emz93PvXCYfVgHhnrR4T3qhw4"],
-    ["Plume",           "0x81705b969cDcc6FbFde91a0C6777bE0EF3A75855"]
+    ["Plume",           "0x81705b969cDcc6FbFde91a0C6777bE0EF3A75855"],
+    ["QuaiTestnet",     "0x004Accf29dD34f88E885e2BdFB1B0105059b3D08"]
   ]], [
   "Devnet", [
     ["Solana",    "Bridge1p5gheXUvJ6jGWGeCsgPKgnE3YgdGKRVCMY9o"],

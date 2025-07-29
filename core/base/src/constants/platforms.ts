@@ -38,6 +38,7 @@ const platformAndChainsEntries = [[
     "Sonic",
     "Converge",
     "Plume",
+    "QuaiTestnet",
   ]], [
   "Solana", [
     "Solana",
